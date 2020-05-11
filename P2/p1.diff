@@ -1,0 +1,158 @@
+diff --git a/Makefile b/Makefile
+index d1e762787..3e88fb261 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1017,7 +1017,7 @@ endif
+ PHONY += prepare0
+ 
+ ifeq ($(KBUILD_EXTMOD),)
+-core-y		+= kernel/ certs/ mm/ fs/ ipc/ security/ crypto/ block/
++core-y		+= kernel/ certs/ mm/ fs/ ipc/ security/ crypto/ block/ p1/
+ 
+ vmlinux-dirs	:= $(patsubst %/,%,$(filter %/, $(init-y) $(init-m) \
+ 		     $(core-y) $(core-m) $(drivers-y) $(drivers-m) \
+diff --git a/arch/x86/entry/syscalls/syscall_64.tbl b/arch/x86/entry/syscalls/syscall_64.tbl
+index f0b1709a5..c3c46f9dc 100644
+--- a/arch/x86/entry/syscalls/syscall_64.tbl
++++ b/arch/x86/entry/syscalls/syscall_64.tbl
+@@ -343,6 +343,8 @@
+ 332	common	statx			__x64_sys_statx
+ 333	common	io_pgetevents		__x64_sys_io_pgetevents
+ 334	common	rseq			__x64_sys_rseq
++335 common  set_tag         __x64_sys_set_tag
++336 common  get_tag         __x64_sys_get_tag
+ 
+ #
+ # x32-specific system call numbers start at 512 to avoid cache impact
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index bc6026cdb..cd72f3d11 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -1205,6 +1205,9 @@ struct task_struct {
+ 	void				*security;
+ #endif
+ 
++	// Tag for set_tag and get_tag systemcalls
++	int	tag;
++
+ #ifdef CONFIG_GCC_PLUGIN_STACKLEAK
+ 	unsigned long			lowest_stack;
+ 	unsigned long			prev_lowest_stack;
+diff --git a/include/linux/syscalls.h b/include/linux/syscalls.h
+index 257cccba3..d65bcad88 100644
+--- a/include/linux/syscalls.h
++++ b/include/linux/syscalls.h
+@@ -1132,6 +1132,9 @@ asmlinkage long sys_mmap_pgoff(unsigned long addr, unsigned long len,
+ 			unsigned long fd, unsigned long pgoff);
+ asmlinkage long sys_old_mmap(struct mmap_arg_struct __user *arg);
+ 
++// P1 Syscalls
++asmlinkage int sys_set_tag(int pid, int new_tag);
++asmlinkage int sys_get_tag(int pid);
+ 
+ /*
+  * Not a real system call, but a placeholder for syscalls which are
+diff --git a/init/init_task.c b/init/init_task.c
+index 5aebe3be4..bf0d6ff7b 100644
+--- a/init/init_task.c
++++ b/init/init_task.c
+@@ -179,6 +179,7 @@ struct task_struct init_task
+ #ifdef CONFIG_SECURITY
+ 	.security	= NULL,
+ #endif
++	.tag = 0,
+ };
+ EXPORT_SYMBOL(init_task);
+ 
+diff --git a/p1/Makefile b/p1/Makefile
+new file mode 100644
+index 000000000..32419da6d
+--- /dev/null
++++ b/p1/Makefile
+@@ -0,0 +1 @@
++obj-y := p1.o
+\ No newline at end of file
+diff --git a/p1/p1.c b/p1/p1.c
+new file mode 100644
+index 000000000..f7ecbf40b
+--- /dev/null
++++ b/p1/p1.c
+@@ -0,0 +1,77 @@
++#include <linux/cred.h>
++#include <linux/kernel.h>
++#include <linux/sched.h>
++#include <linux/pid.h>
++#include <linux/syscalls.h>
++
++SYSCALL_DEFINE2(set_tag, int, pid, int, new_tag)
++{
++    struct pid *pid_struct = NULL;
++    struct task_struct *task = NULL;
++
++    // useful bitmasks
++    const unsigned int BIT_0 = 0b1;
++    const unsigned int BIT_01 = 0b11;
++    const unsigned int BIT_MSB = 0x80000000;
++
++	if (new_tag < 0) return -1;
++
++	pid_struct = find_get_pid(pid);
++	if (!pid_struct)
++		return -1;
++
++	task = pid_task(pid_struct, PIDTYPE_PID);
++	if (!task)
++		return -1;
++
++    // new_tag must have 0 in MSB
++    if (new_tag & BIT_MSB) return -1;
++
++	if (current_uid().val == 0) {
++		// A process running as the superuser may read and write the tag of any process.
++
++		task->tag = new_tag;
++		return new_tag;
++	} else {
++        int new_level = new_tag & BIT_01;
++        int curr_level = task->tag & BIT_01;
++		if (task == current) {
++			// user process changing its own security level
++            // a user process may decrease its own level, but not increase it
++			if (new_level <= curr_level) {
++                // a user process may reset a bit in its tag's bitmap to zero but not set a bit
++                unsigned int i = 0;
++                for (i = 2; i <= 30; i++) {
++                    int mask = BIT_0 << i;
++                    int new_byte = new_tag & mask;
++                    int curr_byte = task->tag & mask;
++                    if (new_byte > curr_byte) return -1;
++                }
++				task->tag = new_tag;
++				return new_tag;
++			} else
++				return -1;
++		}
++		// a user process has read-only access to the tag of any process
++		return -1;
++
++	}
++	return -1;
++}
++
++SYSCALL_DEFINE1(get_tag, int, pid)
++{
++	struct pid *pid_struct = NULL;
++    struct task_struct *task = NULL;
++
++    pid_struct = find_get_pid(pid);
++	if (!pid_struct) {
++		return -1;
++	}
++
++	task = pid_task(pid_struct, PIDTYPE_PID);
++	if (!task)
++		return -1;
++
++	return task->tag;
++}
+\ No newline at end of file

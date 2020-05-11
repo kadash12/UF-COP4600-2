@@ -1,0 +1,27 @@
+.TH GET_TAG 2 03/01/2020 get_tag "System Call"
+.SH NAME
+get_tag - system call that gets the tag of a process
+.SH SYNOPSIS
+get_tag(int pid)
+.PP
+syscall(335, int pid)
+.PP
+pid - integer process id of target process
+.SH DESCRIPTION
+get_tag is a system call that attempts to get the tag of the process identified by pid.
+It checks if the pid is a valid running process and then goes in the process to obtain its tag value and return it.
+If the pid is not valid, the system call will return -1.
+.SH ERRORS
+For any errors, a condition were to fail which it then would return -1.
+Such cases include but not limited too:
+.PP
+a) Invalid pid input, a pid of a non-running process.
+.SH NOTES
+There are several contradictions within the guideline. The ruling outcome is as given:
+.PP
+a) "The MSB shall be set to 0 always" it means that if new_tag has a MSB of 1, you should return -1 and not set the tag.
+.SH SEE ALSO
+get_tag(3), retrieve_get_tag_params(3), interpret_get_tag_result(3)
+.SH AUTHOR
+Johnny Li
+

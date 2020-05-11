@@ -1,0 +1,14 @@
+http://www.linuxhowtos.org/System/creatingman.htm
+https://www.cyberciti.biz/faq/linux-unix-creating-a-manpage/
+
+-Hard link
+-Copy to man path location and gzip it
+sudo cp library.3 /usr/share/man/man3/get_tag.3  
+sudo gzip /usr/share/man/man3/get_tag.3 
+man get_tag.3 or man 3 get_tag
+
+//Update
+sudo mandb
+
+//Soft link
+sudo ln library.3 /usr/share/man/man3/lol.3

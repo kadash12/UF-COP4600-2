@@ -1,0 +1,180 @@
+Ubunutu: ssh reptilian@localhost -p 9474
+
+Command Prompt: sftp -P 9474 reptilian@localhost
+
+git add -u
+git add '*.c' '*.h' '*Makefile*' '*.tbl'
+git diff remotes/origin/master> p2.diff
+
+Compile:
+cc gettag.c -o gettag
+cc settag.c -o settag
+cc test.c -o test
+
+tar -zcvf 3files.tar.gz other.txt somefile.txt somefile2.txt
+.TP 10
+-9)Type “ls” to view the current directory and your “.tar.gz”
+
+Extract
+tar -zxvf tags.tar.gz
+
+git apply p2.diff
+make && sudo make install && sudo make modules_install -j4
+
+1.Add tags variable (uint_32). Located at
+cd src/linux-hwe-5.0.0/kernel/sched
+nano sched.h
+
+2. search for "struct rq {" code
+Add the code:
+	//Add int value to define level time.
+	int timelevel;
+
+3. Go to the main scheduler
+cd src/linux-hwe-5.0.0/kernel/sched
+nano core.c
+//Add int value to define level time.
+	int timelevel0=10;
+	EXPORT_SYMBOL(timelevel0);
+	int timelevel1=10;
+	EXPORT_SYMBOL(timelevel1);
+	int timelevel2=10;
+	EXPORT_SYMBOL(timelevel2);
+	int timelevel3=10;
+	EXPORT_SYMBOL(timelevel3); 
+
+4. add code at "__init sched_init": struct rq *rq;
+//Update level time
+rq->timelevel=10;
+
+5. Create system calls that allows a process to get or set the timelevel 
+of a process. 
+cd src/linux-hwe-5.0.0/include/linux
+nano syscalls.h 
+
+6. One parameter for the get and two parameters for the set using asmlinkage.
+search for "return old;" code
+Add the code:
+#include <asm/linkage.h>
+asmlinkage long sys_get_level_alloc(int level);
+asmlinkage long sys_set_level_alloc(int level, int timelevel);
+
+7. syscall_64.tbl contains the listing of system calls and to be recognized 
+as a system call process it needs to be listed here.
+cd src/linux-hwe-5.0.0/arch/x86/entry/syscalls
+nano syscall_64.tbl
+
+8. Add code:
+337	64	get_level_alloc		__x64_sys_get_level_alloc
+338	64	set_level_alloc		__x64_sys_set_level_alloc	
+
+9. Defines the system call functions initialized from syscalls.h.
+cd src/linux-hwe-5.0.0/kernel
+nano sys.c
+//Bring in global variables
+extern int timelevel0;
+extern int timelevel1;
+extern int timelevel2;
+extern int timelevel3;
+
+10. Add code:
+//Define the get_level_alloc method, one parameter.
+SYSCALL_DEFINE1(get_level_alloc, int, level){
+	//return leveltime# for the respective level
+        if(level == 0){
+		return timelevel0;
+        }
+	else if(level == 1){
+		return timelevel1;
+        }
+	else if(level == 2){
+		return timelevel2;
+	}
+	else if(level == 3){
+		return timelevel3;
+	}
+	return -1;
+}
+
+//Define the set_level_alloc method, two parameter.
+SYSCALL_DEFINE2(set_level_alloc, int, level, int, time) {
+	//Check if Superuser
+	if (current_uid().val == 0){    //Superuser: UID=0
+                //Set time
+		if(level==0){
+                        timelevel0=time;
+                }
+		else if(level==1) {
+                        timelevel1=time;
+		}
+		else if(level==2){
+			timelevel2=time;
+		}
+		else if(level==3){
+			timelevel3=time;
+		}
+		else{   //Not in level range
+                        return -1;
+		}
+		return time;
+		
+	}
+	//Return -1 if not superuser
+	return -1;      
+}
+
+11. Implement round robin
+cd src/linux-hwe-5.0.0/kernel/sched
+nano core.c 
+code at static struct rq *move_queued_task:
+int level=3;
+//Get current process tag
+int tagNum = p->tag;
+//Get level
+lsb = tagNum << 30;
+lsb = lsb >> 30;
+	//Round robin level
+	if(level<0){    //Reset level
+		level=3;
+	}
+	//Search for process in that level
+	for(lsb != level){      //if process is not in that level
+		p = class->pick_next_task(rq, prev, rf);        //pick next process
+		//Get current process tag
+		tagNum = p->tag;
+                //Get level
+		lsb = tagNum << 30;
+                lsb = lsb >> 30;
+	}
+	level--;        //Next level
+
+12. Read tag of current proccess and get the time for that tag level. Set that time to the tick time.
+Code at void scheduler_tick(void):
+cd src/linux-hwe-5.0.0/kernel/sched
+nano core.c schedule_tick
+	//Get current process tag
+	int tagNum = curr->tag;
+        //Get level
+        lsb = tagNum << 30;
+	lsb = lsb >> 30;
+	//Set time
+	if(lsb == 0){
+		rq->timelevel=timelevel0;
+	}
+	else if(lsb == 1){
+		rq->timelevel=timelevel1;
+	}
+	else if(lsb == 2){
+		 rq->timelevel=timelevel2;
+	}
+	else if(lsb == 3){
+		rq->timelevel=timelevel3;
+        }
+
+13. Set the timelevel to timeslice
+cd src/linux-hwe-5.0.0/kernel/sched
+Code at core.c static int sched_rr_get_interval
+//Set timeslice
+time_slice=rq->timelevel;  
+
+cat /proc/sys/kernel/sched_rr_timeslice_ms

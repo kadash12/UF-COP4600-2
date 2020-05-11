@@ -1,0 +1,95 @@
+P2: Process Scheduling
+COP4600
+	
+NAME
+Johnny Li
+
+DATE
+4/9/2020
+
+SYNOPSIS
+	The goal of project 2 was to implement a new scheduler with four Major Levels of queuing for processes. These queues will
+correspond to the four levels in the tags from Project 1. Each Major Level will be allocated some amount of time to run on the CPU.
+The scheduler will use a Round Robin-like scheduling algorithm to allocate time to each Major Level. Two system calls in the OS 
+along with two library functions for the system library API so that the system calls can be invoked from a C program. The system 
+calls within the kernel space handled the retrieval and setting of allocated time on the processes level through a get and set method.
+A static library function was created to allow the system call to be invoked from a C API by referring to their respective syscall(). 
+A harness library was created to verify the system calls, returning a pointer to an int array of 2-4 values that can be used to make 
+the system call. Manual pages detailing the two system calls, the two wrapper library functions, and the four harness function calls 
+were also created and stored within the man file path location.
+
+DESCRIPTION 
+	Assuming that the virtual box OS was patched with the given p1.diff and imported with the given project 1 tags library, the 
+first stage was to create a custom time (timelevel) variable for all running queues. This would be an integer value variable that had 
+to be declared within both scheduler structure so that all running queues will have it upon initialization. The task structure is located at:
+/home/reptilian/src/linux-hwe-5.0.0/include/linux/sched.h
+	The scheduler’s header was edited because it is where all process to be run or implemented is prepared [1], thus it would 
+be the place to declare a timelevel for all running queues to have when they are made. I created a custom integer called "timelevel" to 
+hold the allocated time of a level in structure of the running queues within sched.h.  
+	Once the custom attribute timelevel is declared, it now has to be initialized a default value of 10ms. This initialized timelevel value
+must apply to all those running queues. Therefore the initialization of the timelevel occurs in "__init sched_init", the initialization of the 
+scheduler located at: 
+/home/reptilian/src/linux-hwe-5.0.0/include/linux/core.c
+	core.c is where the core functions of the scheduler is located which would be the desired place to set the default value as it would apply 
+to all the running queues being initially created [2]. This was hinted from the .c and .h dual of the files. As requested in the project documentation, 
+timelevel was made 10 through "rq->timelevel=10;". Within core.c some system global variables are declared and initialized so that system calls could
+indirectly alter or read the running queue's timelevel. This allowed the edit of the timelevel without needing to enter the core.c file but rather the 
+it can be done through the export of symbols in sys.c.
+	A minic of round robin for the scheduler is coded in core.c within "struct rq *move_queued_task" method as it handles with allocating the next
+process to be ran. The code makes it so that the next process is obtained and it's tag is checked for its level. If the check tag level is not the same
+as the current running level then the process is ignored and the next one process in line is obtained. This goes on till the total time for the level is
+used and then the next level is set. The "struct rq *move_queued_task" method was chosen as the processes to be run next can be easily checked without 
+having yet done any actual CPU usage on the process and that the queue is readily accessable in order to be ran, making it easy to filter by level.
+	Within core.c, in the "scheduler_tick()", it is coded to read the level of current proccess and set the time for scheduler based on that tag level. 
+The method was chosen as it is where the time quantum is handled, in terms of ticks, so it is a reasonable place to set the time. The time is set as such
+"rq->timelevel=timelevel0" where the timelevel translated to ticks and set in as the timeslice. The timeslice for a round robin is located in 
+"sched_rr_get_interval" method of core.c where the timelevel is set to timeslice by "time_slice=rq->timelevel;".
+	The second stage is to create system calls that allow a process to get and set the time allocated for each level. The system call header is 
+where the get_level_alloc and set_level_alloc declaration need to be placed to be recognized as system calls. The location is at:
+/home/reptilian/src/linux-hwe-5.0.0/include/linux/syscalls.h
+	Stating the header of the get_level_alloc, with one parameter, and the set_level_alloc, two parameters, using asmlinkage [3] as such "asmlinkage long 
+sys_get_level_alloc(int level);" and "asmlinkage long sys_set_level_alloc(int level, int timelevel);". 
+	The system call functions from syscalls.h. are defined in sys.c located at:
+/home/reptilian/src/linux-hwe-5.0.0/kernel/sys.c
+	The get_level_alloc system call reads and returns the allocated time at that level identified by the input paramete (level) for all users, an 
+unrestrictive system call through accessing the global variables. While set_level_alloc follow the project guidelines and “rules for this system will be based 
+on a write restricted access model” [4]. The set_level_alloc attempts to change the timelevel of the level identified input parameter only if the user is a root
+user and that the time to be allocated meets document specification. The allocated time cannot be negative and the total time allocated cannot be less than
+5ms where the changes happens on the global variables which is linked to the running queue timelevel. 
+	The third step is to list the functions to be recognized as a system call process, it needs to be listed here:
+/home/reptilian/src/linux-hwe-5.0.0/arch/x86/entry/syscalls/syscall_64.tbl
+	The syscall_64.tbl contains the listing of system call numbers and to be recognized as a system call process it needs to be listed 
+here. In the syscall_64.tbl, the get_level_alloc and set_level_alloc functions are recorded in the system call log as “__x64_sys_get_level_alloc” and 
+"__x64_sys_set_level_alloc" so when called, the system call numbers can be obtained to identified and used to trigger the appropriate system call to run.
+	The final stage was to create static library functions that allow the system calls to be invoked via a C API. Thus, the library and 
+harness function headers, given in the project document, was declared in tags.h and harness.h. The definitions of the system calls were 
+hardcoded in tags.c and the interpretation of the values obtained from the system calls was handled through harness.c [5]. The library functions also
+set the errno value for any errors that may occur in during the system call, the errnos are documented in the man pages. A static library file named 
+libtag.a and a Makefile was created to compile everything needed with the projects. The entire tags folder was then compiled, tar, and compress 
+to meet specifications. 
+	The 3 man pages were created in the tags; 2 per a system call (man 2) and 1 for the library functions (man 3),. The man pages were then 
+gzipped and in the makefile, it was hardcoded to be linked and moved to the manpath location with "sudo cp (path)": 
+/usr/share/man
+so that they can be called on from anywhere in the OS. For the library functions, multiple links were made to the one man page to simplify the coding.
+
+TESTING
+	In testing the system call, the test files from canvas (p2_student_test) were placed into the OS and then compiled and ran. The automated test 
+unit ran and passed all test cases. Additional testing was done with a mix of combinational input testing, for verifying that the program still met 
+specifications under various circumstances. A program was written to check the errno value and to check the scheduling time were inherited correctly. 
+The man pages were tested by going to a random directory and "man <#> name" to ensure they
+work.
+
+ERRORS
+	Some bug encountered includes some whitespace errors and an invalid level or time input will lead to the program to crash. A critical bug was that race 
+condition occurred with rapid use of set_level_alloc resulting in confusing outputs that took a while to understand. 
+
+REFERENCES/CITATIONS
+[1] https://www.spinics.net/lists/newbies/msg10175.html
+[2] https://0xax.gitbooks.io/linux-insides/Initialization/linux-initialization-8.html
+[3] https://stackoverflow.com/questions/10459688/what-is-the-asmlinkage-modifier-meant-for
+[4] https://stackoverflow.com/questions/39229639/how-to-get-current-processs-uid-and-euid-in-linux-kernel-4-2
+[5] https://bytes.com/topic/c/answers/731500-writing-test-harness-function
+
+YOUTUBE
+https://youtu.be/ocY3chz7zbk 
+https://www.youtube.com/watch?v=ocY3chz7zbk

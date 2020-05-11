@@ -1,0 +1,394 @@
+diff --git a/.config b/.config
+index 66950a609..296c2d618 100644
+--- a/.config
++++ b/.config
+@@ -4,10 +4,10 @@
+ #
+ 
+ #
+-# Compiler: gcc (Ubuntu 7.4.0-1ubuntu1~18.04.1) 7.4.0
++# Compiler: gcc (Ubuntu 7.5.0-3ubuntu1~18.04) 7.5.0
+ #
+ CONFIG_CC_IS_GCC=y
+-CONFIG_GCC_VERSION=70400
++CONFIG_GCC_VERSION=70500
+ CONFIG_CLANG_VERSION=0
+ CONFIG_CC_HAS_ASM_GOTO=y
+ CONFIG_IRQ_WORK=y
+diff --git a/Makefile b/Makefile
+index d1e762787..3e88fb261 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1017,7 +1017,7 @@ endif
+ PHONY += prepare0
+ 
+ ifeq ($(KBUILD_EXTMOD),)
+-core-y		+= kernel/ certs/ mm/ fs/ ipc/ security/ crypto/ block/
++core-y		+= kernel/ certs/ mm/ fs/ ipc/ security/ crypto/ block/ p1/
+ 
+ vmlinux-dirs	:= $(patsubst %/,%,$(filter %/, $(init-y) $(init-m) \
+ 		     $(core-y) $(core-m) $(drivers-y) $(drivers-m) \
+diff --git a/arch/x86/entry/syscalls/syscall_64.tbl b/arch/x86/entry/syscalls/syscall_64.tbl
+index f0b1709a5..e185183db 100644
+--- a/arch/x86/entry/syscalls/syscall_64.tbl
++++ b/arch/x86/entry/syscalls/syscall_64.tbl
+@@ -343,6 +343,10 @@
+ 332	common	statx			__x64_sys_statx
+ 333	common	io_pgetevents		__x64_sys_io_pgetevents
+ 334	common	rseq			__x64_sys_rseq
++335 common  set_tag         __x64_sys_set_tag
++336 common  get_tag         __x64_sys_get_tag
++337	64	get_level_alloc		__x64_sys_get_level_alloc
++338	64	set_level_alloc		__x64_sys_set_level_alloc
+ 
+ #
+ # x32-specific system call numbers start at 512 to avoid cache impact
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index bc6026cdb..cd72f3d11 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -1205,6 +1205,9 @@ struct task_struct {
+ 	void				*security;
+ #endif
+ 
++	// Tag for set_tag and get_tag systemcalls
++	int	tag;
++
+ #ifdef CONFIG_GCC_PLUGIN_STACKLEAK
+ 	unsigned long			lowest_stack;
+ 	unsigned long			prev_lowest_stack;
+diff --git a/include/linux/syscalls.h b/include/linux/syscalls.h
+index 257cccba3..4e4c1cd96 100644
+--- a/include/linux/syscalls.h
++++ b/include/linux/syscalls.h
+@@ -83,6 +83,7 @@ union bpf_attr;
+ #include <linux/key.h>
+ #include <linux/personality.h>
+ #include <trace/syscall.h>
++#include <asm/linkage.h>
+ 
+ #ifdef CONFIG_ARCH_HAS_SYSCALL_WRAPPER
+ /*
+@@ -1132,6 +1133,9 @@ asmlinkage long sys_mmap_pgoff(unsigned long addr, unsigned long len,
+ 			unsigned long fd, unsigned long pgoff);
+ asmlinkage long sys_old_mmap(struct mmap_arg_struct __user *arg);
+ 
++// P1 Syscalls
++asmlinkage int sys_set_tag(int pid, int new_tag);
++asmlinkage int sys_get_tag(int pid);
+ 
+ /*
+  * Not a real system call, but a placeholder for syscalls which are
+@@ -1315,4 +1319,7 @@ static inline unsigned int ksys_personality(unsigned int personality)
+ 	return old;
+ }
+ 
++asmlinkage long sys_get_level_alloc(int level);
++asmlinkage long sys_set_level_alloc(int level, int timelevel);
++
+ #endif
+diff --git a/init/init_task.c b/init/init_task.c
+index 5aebe3be4..bf0d6ff7b 100644
+--- a/init/init_task.c
++++ b/init/init_task.c
+@@ -179,6 +179,7 @@ struct task_struct init_task
+ #ifdef CONFIG_SECURITY
+ 	.security	= NULL,
+ #endif
++	.tag = 0,
+ };
+ EXPORT_SYMBOL(init_task);
+ 
+diff --git a/kernel/sched/core.c b/kernel/sched/core.c
+index 1fc0b04ed..5f0f56c59 100644
+--- a/kernel/sched/core.c
++++ b/kernel/sched/core.c
+@@ -6,6 +6,7 @@
+  *  Copyright (C) 1991-2002  Linus Torvalds
+  */
+ #include "sched.h"
++#include <linux/export.h>
+ 
+ #include <linux/nospec.h>
+ 
+@@ -22,6 +23,16 @@
+ #define CREATE_TRACE_POINTS
+ #include <trace/events/sched.h>
+ 
++	//Add int value to define level time.
++	int timelevel0=10;
++	EXPORT_SYMBOL(timelevel0);
++	int timelevel1=10;
++	EXPORT_SYMBOL(timelevel1);
++	int timelevel2=10;
++	EXPORT_SYMBOL(timelevel2);
++	int timelevel3=10;
++	EXPORT_SYMBOL(timelevel3);
++
+ DEFINE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
+ 
+ #if defined(CONFIG_SCHED_DEBUG) && defined(CONFIG_JUMP_LABEL)
+@@ -924,11 +935,34 @@ static inline bool is_cpu_allowed(struct task_struct *p, int cpu)
+  *
+  * Returns (locked) new rq. Old rq's lock is released.
+  */
++//Iniital level
++int level=0;
++
+ static struct rq *move_queued_task(struct rq *rq, struct rq_flags *rf,
+ 				   struct task_struct *p, int new_cpu)
+ {
+ 	lockdep_assert_held(&rq->lock);
+ 
++	//Get current process tag
++	int tagNum = p->tag;
++	//Get level
++	lsb = tagNum << 30;
++	lsb = lsb >> 30;
++	//Round robin level
++	if(level<0){	//Reset level
++		level=3;
++	}
++	//Search for process in that level
++	for(lsb != level){	//if process is not in that level
++		p = class->pick_next_task(rq, prev, rf);        //pick next process
++		//Get current process tag
++		tagNum = p->tag;
++		//Get level
++		lsb = tagNum << 30;
++		lsb = lsb >> 30;
++	}
++	level--;	//Next level
++
+ 	WRITE_ONCE(p->on_rq, TASK_ON_RQ_MIGRATING);
+ 	dequeue_task(rq, p, DEQUEUE_NOCLOCK);
+ 	set_task_cpu(p, new_cpu);
+@@ -3043,6 +3077,7 @@ unsigned long long task_sched_runtime(struct task_struct *p)
+ 	return ns;
+ }
+ 
++int lsb = 0;	//Current level
+ /*
+  * This function gets called by the timer code, with HZ frequency.
+  * We call it with interrupts disabled.
+@@ -3054,6 +3089,25 @@ void scheduler_tick(void)
+ 	struct task_struct *curr = rq->curr;
+ 	struct rq_flags rf;
+ 
++	//Get current process tag
++	int tagNum = curr->tag;
++	//Get level
++	lsb = tagNum << 30;
++	lsb = lsb >> 30;
++	//Set time
++	if(lsb == 0){
++		rq->timelevel=timelevel0;
++	}
++	else if(lsb == 1){
++		 rq->timelevel=timelevel1;
++	}
++	else if(lsb == 2){
++		 rq->timelevel=timelevel2;
++	}
++	else if(lsb == 3){
++		 rq->timelevel=timelevel3;
++	}
++
+ 	sched_clock_tick();
+ 
+ 	rq_lock(rq, &rf);
+@@ -5256,6 +5310,9 @@ static int sched_rr_get_interval(pid_t pid, struct timespec64 *t)
+ 	struct rq *rq;
+ 	int retval;
+ 
++	//Set timeslice
++	time_slice=rq->timelevel;
++
+ 	if (pid < 0)
+ 		return -EINVAL;
+ 
+@@ -6032,6 +6089,9 @@ void __init sched_init(void)
+ 	for_each_possible_cpu(i) {
+ 		struct rq *rq;
+ 
++		//Inial time allocated
++		rq -> timelevel=10;
++
+ 		rq = cpu_rq(i);
+ 		raw_spin_lock_init(&rq->lock);
+ 		rq->nr_running = 0;
+diff --git a/kernel/sched/sched.h b/kernel/sched/sched.h
+index 425a5589e..5cc4245d5 100644
+--- a/kernel/sched/sched.h
++++ b/kernel/sched/sched.h
+@@ -808,6 +808,9 @@ struct rq {
+ 	/* runqueue lock: */
+ 	raw_spinlock_t		lock;
+ 
++	//Add int value to define level time.
++        int timelevel;
++
+ 	/*
+ 	 * nr_running and cpu_load should be in the same cacheline because
+ 	 * remote CPUs use both these fields when doing load calculation.
+diff --git a/kernel/sys.c b/kernel/sys.c
+index e33991478..517ef8858 100644
+--- a/kernel/sys.c
++++ b/kernel/sys.c
+@@ -73,6 +73,12 @@
+ 
+ #include "uid16.h"
+ 
++//Bring in global variables
++extern int timelevel0;
++extern int timelevel1;
++extern int timelevel2;
++extern int timelevel3;
++
+ #ifndef SET_UNALIGN_CTL
+ # define SET_UNALIGN_CTL(a, b)	(-EINVAL)
+ #endif
+@@ -125,6 +131,51 @@
+ # define PAC_RESET_KEYS(a, b)	(-EINVAL)
+ #endif
+ 
++//Define the get_level_alloc method, one parameter.
++SYSCALL_DEFINE1(get_level_alloc, int, level){
++	//return leveltime# for the respective level
++	if(level == 0){
++		return timelevel0;
++	}
++	else if(level == 1){
++		return timelevel1;
++        }
++        else if(level == 2){
++		return timelevel2;
++	}
++	else if(level == 3){
++		return timelevel3;
++	}
++
++	return -1;
++}
++
++//Define the set_level_alloc method, two parameter.
++SYSCALL_DEFINE2(set_level_alloc, int, level, int, time) {
++	//Check if Superuser
++	if (current_uid().val == 0){    //Superuser: UID=0
++		//Set time
++		if(level==0){
++			timelevel0=time;
++		}
++		else if(level==1) {
++			timelevel1=time;
++		}
++		else if(level==2){
++			timelevel2=time;
++		}
++		else if(level==3){
++			timelevel3=time;
++		}
++		else{ //Not in level range
++			return -1;
++		}
++		return time;
++	}
++	//Return -1 if not superuser
++	return -1;
++}
++
+ /*
+  * this is where the system-wide overflow UID and GID are defined, for
+  * architectures that now have 32-bit UID/GID but didn't in the past
+diff --git a/p1/Makefile b/p1/Makefile
+new file mode 100644
+index 000000000..32419da6d
+--- /dev/null
++++ b/p1/Makefile
+@@ -0,0 +1 @@
++obj-y := p1.o
+\ No newline at end of file
+diff --git a/p1/p1.c b/p1/p1.c
+new file mode 100644
+index 000000000..f7ecbf40b
+--- /dev/null
++++ b/p1/p1.c
+@@ -0,0 +1,77 @@
++#include <linux/cred.h>
++#include <linux/kernel.h>
++#include <linux/sched.h>
++#include <linux/pid.h>
++#include <linux/syscalls.h>
++
++SYSCALL_DEFINE2(set_tag, int, pid, int, new_tag)
++{
++    struct pid *pid_struct = NULL;
++    struct task_struct *task = NULL;
++
++    // useful bitmasks
++    const unsigned int BIT_0 = 0b1;
++    const unsigned int BIT_01 = 0b11;
++    const unsigned int BIT_MSB = 0x80000000;
++
++	if (new_tag < 0) return -1;
++
++	pid_struct = find_get_pid(pid);
++	if (!pid_struct)
++		return -1;
++
++	task = pid_task(pid_struct, PIDTYPE_PID);
++	if (!task)
++		return -1;
++
++    // new_tag must have 0 in MSB
++    if (new_tag & BIT_MSB) return -1;
++
++	if (current_uid().val == 0) {
++		// A process running as the superuser may read and write the tag of any process.
++
++		task->tag = new_tag;
++		return new_tag;
++	} else {
++        int new_level = new_tag & BIT_01;
++        int curr_level = task->tag & BIT_01;
++		if (task == current) {
++			// user process changing its own security level
++            // a user process may decrease its own level, but not increase it
++			if (new_level <= curr_level) {
++                // a user process may reset a bit in its tag's bitmap to zero but not set a bit
++                unsigned int i = 0;
++                for (i = 2; i <= 30; i++) {
++                    int mask = BIT_0 << i;
++                    int new_byte = new_tag & mask;
++                    int curr_byte = task->tag & mask;
++                    if (new_byte > curr_byte) return -1;
++                }
++				task->tag = new_tag;
++				return new_tag;
++			} else
++				return -1;
++		}
++		// a user process has read-only access to the tag of any process
++		return -1;
++
++	}
++	return -1;
++}
++
++SYSCALL_DEFINE1(get_tag, int, pid)
++{
++	struct pid *pid_struct = NULL;
++    struct task_struct *task = NULL;
++
++    pid_struct = find_get_pid(pid);
++	if (!pid_struct) {
++		return -1;
++	}
++
++	task = pid_task(pid_struct, PIDTYPE_PID);
++	if (!task)
++		return -1;
++
++	return task->tag;
++}
+\ No newline at end of file

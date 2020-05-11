@@ -1,0 +1,65 @@
+.TH HARNESS 3 03/01/2020 harness "Harness Function"
+.SH NAME
+retrieve_get_tag_params() - harness function that returns the parameters used to make the system call get_tag
+.PP
+retrieve_set_tag_params() - harness function that returns the parameters used to make the system call set_tag
+.PP
+interpret_get_tag_result() - harness function that interpretation the returning value from the system call get_tag
+.PP
+interpret_set_tag_result() - harness function that interpretation the returning value from the system call set_tag
+.SH SYNOPSIS
+retrieve_get_tag_params(int pid)
+.PP
+retrieve_set_tag_params(int pid, int new_tag)
+.PP
+interpret_get_tag_result(int ret_value)
+.PP
+interpret_set_tag_result(int ret_value)
+.PP
+pid - integer process id of target process
+.PP
+new_tag - an uint32_t tag value to be updated in the target process
+.PP
+ret_value - what the library call should return to the user program
+.SH DESCRIPTION
+These functions serve as a testing harness to verify the system  calls.
+System call parameter retrieval data shall be returned as a pointer to an int array of 2-4 values that can be used to make the system call.
+The array has this format:
+.PP
+{call_number, num_parameters, [parameter1], [parameter2]} e.g.:{42, 2, 867, 5309} -> syscall(42, 867, 5309)
+.PP
+retrieve_get_tag_params(int pid)
+	Returns an int array of 2-4 values that can be used to make the get-tag system call.
+.PP
+retrieve_set_tag_params(int pid, int new_tag)
+	Returns an int array of 2-4 values that can be used to make the set-tag system call
+.PP
+interpret_get_tag_result(int ret_value)
+	After making the get_tag system call, the syscall return value to this function call. It should return get_tag’s interpretation of the system call completing with return value ret_value
+(i.e., what the library call should return to the user program).
+.PP
+interpret_set_tag_result(int ret_value)
+	After making the set_tag system call, the syscall return value to this function call. It should return set_tag’s interpretation of the system call completing with return value ret_value
+(i.e., what the library call should return to the user program).
+.SH ERRORS
+For any errors, any condition were to fail which it then would return -1.
+Such cases include but not limited too:
+.PP
+Inputting an invalid pid or new_tag. The main checking occurs through the system call rather than in the system call.
+.SH NOTES
+There are several contradictions within the guideline. The ruling outcome is as given:
+.PP
+a) The returning value is the tag of from the system call, not the "access level".
+.PP
+b) The 2 interpretation result function will simply return the outcome of the system call.
+.PP
+c) retrieve_get_tag_params(int pid) will return an int array of 3 values.
+.PP
+d) retrieve_set_tag_params(int pid, int new_tag) will return an int array of 4 values.
+.SH SEE ALSO
+get_tag(2), get_tag(3)
+.PP
+set_tag(2), set_tag(3)
+.SH AUTHOR
+Johnny Li
+

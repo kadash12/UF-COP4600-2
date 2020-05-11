@@ -1,0 +1,55 @@
+Johnny Li
+1/30/2020
+COP4600: Operating System
+P0: My_First_Kernel_Mod
+							P0 Report
+Synopsis:
+	The goal of project 0 was to print a boot debug message in the kernel boot after the 
+	“Freeing unused kernel image memory” messages. Before the start of the project, a “clean” 
+	snapshot of the kernel from 5.0.21+ codebase was built by following the troubleshooting 
+	directions. After modifying the kernel, the kernel was re-build and a screenshot of the 
+	message was taken. The final task is to create a unified patch file and test it against 
+	the clean snapshot to ensure that its function correctly, the message reappears after the 
+	patch.
+
+Description:
+      The goal was achieved by searching for the hinted term “rcu_end_inkernel_boot()” using the 
+	grep command in ubuntu kernel source (grep -ir "rcu_end_inkernel_boot()"). It was discovered 
+	that it was only being actively used in the main.c file at /home/reptilian/src/linux-hwe-5.0.0/init 
+	with no other files to choose from. After accessing the main.c for editing in nano, the hinted term was 
+	searched using cltr-W. Then the boot message was coded with one new line above and below after the 
+	hinted term line. This is seen below:
+		pr_info(" ");
+		pr_info("#### Johnny Li (UFID: 9699-4228) How I figured this out is a miracle. #####");
+		pr_info(" ");
+
+      The function pr_info was used to print the message as printf and printk gave me an error, noted in source 
+	[1]. After restarting ubuntu and confirming that the debug boot message did appear with the virtual box
+	screen capturing software, the command make && sudo make install && sudo make modules_install was called 
+	in the /home/reptilian/linux-hwe-5.0.0 to ensure the changes were made.
+
+      To create the patch, then I followed the given code in the project document: 
+      	cd /usr/rep/src/linux-hwe-5.0.0 
+      	git add -u 
+      	git add '*.c' '*.h' '*Makefile*' '*.tbl' 
+      	git diff master > p0.diff
+      
+	Note that the path remotes/origin/master did not work for me therefore I got around it with only the master.
+
+      Then the patch was downloaded to my local storage by command prompt sftp [2] with the command sftp -P 9474 
+	reptilian@localhost to access the kernel. I navigated to the directory with the patch and used command “get 
+	p0.diff” to retrieve the patch. To test the patch, ubuntu was reverted to its clean snapshot and the local 
+	patch was uploaded to the kernel by command prompt sftp again but with the command “put p0.diff”. I followed 
+	the rest given code in the project document to install the patch with and rebooted in debug mode to confirm 
+	that the boot message appeared again. The main portion of the project is therefore completed.
+
+ Source Links:
+[1] https://stackoverflow.com/questions/42243185/difference-between-printk-and-pr-info
+
+[2] https://docs.oracle.com/cd/E26502_01/html/E29001/remotehowtoaccess-14.html
+
+Video Link: 
+https://youtu.be/UrYvnA32MI4 
+
+If it doesn’t work use this one:
+https://www.youtube.com/watch?v=UrYvnA32MI4&feature=youtu.be

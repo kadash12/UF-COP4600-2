@@ -1,0 +1,55 @@
+.TH SET_TAG 2 03/01/2020 set_tag "System Call"
+.SH NAME
+set_tag - system call that changes the tag of a process
+.SH SYNOPSIS
+set_tag(int pid, int new_tag)
+.PP
+syscall(336, int pid, int new_tag)
+.PP
+pid - integer process id of target process
+.PP
+new_tag - an uint32_t tag value to be updated in the target process
+.SH DESCRIPTION
+set_tag is a system call that attempts to change the tag of the process identified by pid to the new tag value new_tag.
+The project guidelines are what decides whether the tag change will occur.
+If all conditions are met the old tag value will return the updated new tag value, else if any conditions were to fail then it would return -1.
+These conditions are as such:
+.PP
+3) A process running as the superuser may read and write the tag of any process (all 32 bits of it, but it still cannot set the MSB to 1).
+.PP
+4) A user process has read-only access to the tag of any process.
+.PP
+5) A user process may decrease its own level, but not increase it.
+.PP
+6) A user process may reset a bit in its tag's bitmap to zero but not set a bit.
+.SH ERRORS
+For any errors, a condition were to fail which it then would return -1.
+Such cases include but not limited too:
+.PP
+a) Inputting an invalid pid or new_tag will return -1 and not run the system call.
+.PP
+b) Attempting to a set a process with a new_tag that has the MSB set.
+.PP
+c) Attempting set the tag of a process other than the current process self while not a superuser.
+.PP
+d) Attempting to set a bit in the current process self while not a superuser, excludes the LSBs conditions.
+.PP
+e) Attempting to increase its own level.
+.SH NOTES
+There are several contradictions within the guideline. The ruling outcome is as given:
+.PP
+a) When the doc says "The MSB shall be set to 0 always" it means that if new_tag has a MSB of 1, you should return -1 and not set the tag.
+.PP
+b) Setting a bit means changing it to 1. Resetting a bit mean changing it to 0.
+.PP
+c) 4-6 Only affects the current process (itself) and not any other process.
+.PP
+d) 3 references the Superuser (sudo) status of the current process, not the target process.
+.PP
+e) 4 can be override when applying 5-6 on the current process.
+.PP
+f) 6 can be override when applying a decrement on the user's tag level (ex. 2 (0b10) to 1 (0b01)).
+.SH SEE ALSO
+set_tag(3), retrieve_set_tag_params(3), interpret_set_tag_result(3)
+.SH AUTHOR
+Johnny Li

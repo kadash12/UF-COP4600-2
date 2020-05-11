@@ -1,0 +1,6 @@
+linux-hwe-5.0.0/ubuntu/vbox/vboxvideo/product-generated.h
+linux-hwe-5.0.0/ubuntu/vbox/vboxsf/include/VBox/ostypes.h
+linux-hwe-5.0.0/ubuntu/vbox/vboxsf/product-generated.h
+linux-hwe-5.0.0/ubuntu/vbox/vboxguest/include/VBox/ostypes.h
+linux-hwe-5.0.0/ubuntu/vbox/vboxguest/product-generated.h
+linux-hwe-5.0.0/ubuntu/vbox-update

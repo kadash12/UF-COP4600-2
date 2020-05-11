@@ -1,0 +1,255 @@
+Ubunutu: ssh reptilian@localhost -p 9474
+
+Command Prompt: sftp -P 9474 reptilian@localhost
+
+git add -u
+git add '*.c' '*.h' '*Makefile*' '*.tbl'
+git diff remotes/origin/master> p1.diff
+
+Compile:
+cc gettag.c -o gettag
+cc settag.c -o settag
+cc test.c -o test
+
+tar -zcvf 3files.tar.gz other.txt somefile.txt somefile2.txt
+.TP 10
+-9)Type “ls” to view the current directory and your “.tar.gz”
+
+Extract
+tar -zxvf p1_student_test.tar.gz
+
+git apply p1.diff
+make && sudo make install && sudo make modules_install -j4
+
+Commands: ps -A
+
+tags:
+1.Add tags variable (uint_32). Located at
+cd src/linux-hwe-5.0.0/include/linux
+nano sched.h
+ * New fields for task_struct should be added above here, so that
+ * they are included in the randomized p
+
+2. search for "struct task_struct" code
+Add the code:
+	//Add uint32_t value to define tag.
+        uint32_t tags;
+
+a. Process are initializes thus the tag should be given parent
+cd src/linux-hwe-5.0.0/kernel
+nano user.c
+
+b. add code at "struct user_struct root_user = ":
+.tags = 0,
+
+c. include/linux/sched/user.h
+
+d. "struct user_struct {"
+uint32_t tags;
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+3. Process are initializes thus the tag should be given here as it 
+applys to all the processes.
+cd src/linux-hwe-5.0.0/kernel
+nano fork.c
+
+4. search for "#ifdef CONFIG_FUTEX" code
+Add the code:
+	//Pointer to point to the defualt tags. 
+	//p->tags=0;
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+-----------------------------------------------------------------------
+System Call:
+5. Create system calls that allows a process to get or set the tags 
+of a process. 
+cd src/linux-hwe-5.0.0/include/linux
+nano syscalls.h 
+
+6. One parameter for the get and two parameters for the set using asmlinkage.
+search for "return old;" code
+Add the code:
+#include <asm/linkage.h>
+asmlinkage long sys_get_tag(int pid);
+asmlinkage long sys_set_tag(int pid, uint32_t tags);
+
+7. syscall_64.tbl contains the listing of system calls and to be recognized 
+as a system call process it needs to be listed here.
+cd src/linux-hwe-5.0.0/arch/x86/entry/syscalls
+nano syscall_64.tbl
+
+8. Add code:
+335	64	get_tag		__x64_sys_get_tag
+336	64	set_tag		__x64_sys_set_tag	
+
+9. Defines the system call functions initialized from syscalls.h.
+cd src/linux-hwe-5.0.0/kernel
+nano sys.c
+
+10. Add code:
+//Define the get_tag method, one parameter.
+SYSCALL_DEFINE1(get_tag, int, who){
+        //Set pointer,MSB, and defualt return value.
+        struct task_struct *p;
+        uint32_t tagNum=-1;
+        int msb;
+
+        //Invokes system call which reads the pid of the process identified by who.
+        if (who){
+                p = find_task_by_vpid(who);
+        }
+        //Get the tag on success.
+        if (p){
+                tagNum = p ->tags;                                                                                      
+                msb = tagNum >> 31;     //Get MSB                         
+		//Check MSB                   
+		if(msb == 1){                  
+		 	return -1;
+        	}     
+ 	}
+        return tagNum;                                                                                                  
+}
+
+//Define the set_tag method, two parameter.
+SYSCALL_DEFINE2(set_tags, int, who, uint32_t, which) {
+        //Set pointers, MSB, LSB, and defualt return value.
+        struct task_struct *p;
+        uint32_t tagNum= which;
+        int msb;
+        int lsb;
+        uint32_t temp;  //Temporary Variable
+	uint32_t temp2;
+
+        //Invokes system call which reads the pid of the process identified by who.
+        if (who){
+                p = find_task_by_vpid(who);
+        }
+
+        msb = which >> 31;      //Get MSB
+        //Check if MSB is set on new tag
+        if (msb == 1){
+                return -1;      //Return -1
+        }
+
+        temp = which << 30;
+        lsb = temp >> 30;       //Get LSB New
+
+        //Check if Superuser
+	if (current_uid().val == 0){	//Superuser: UID=0
+		if (p){
+                	p ->tags = tagNum;
+			return p ->tags;
+		}              
+	}
+	//User process
+	else if ((current ->pid == who) && which <= p->tags){
+		//Get bitmap only
+		temp = which >> 2;	//New
+		temp2 = p ->tags >> 2;	//Old
+		//Bitwise AND and return position
+		temp = (temp & (~temp2)) << 2;
+		
+		if(temp == 0){	//No bit set
+			temp = which >> 2;	//New		
+			temp = which << 2;
+
+			//Get LSB Old
+			temp2 = p ->tags << 30;
+			temp2 = temp2 >> 30;
+			//Decrease tag level
+			if(lsb<=temp2){
+				temp2=lsb;
+				//Bitwise OR for new tag
+				temp = temp | temp2;
+				//Set new tag for process
+				p ->tags = temp;
+				//Return tag
+				return p->tags;
+			}
+			else{
+				return -1;
+			}
+		}
+	}
+       return -1;
+}
+
+
+
+Makefile:
+#Johnny Li
+#COP4600: OS
+#3/1/2020
+#P1: Makefile to compile library tags
+
+#Macros
+CC=cc
+
+#Make
+tags.o: tags.c
+        $(CC) -o tags.o -c tags.c
+        ar cr libtags.a tags.o
+
+tag.c:
+
+//Headers
+#include "tags.h"
+
+/*
+Invokes system call which reads the tag of the process identified by pid. Returns the access level
+on success, and -1 otherwise.
+*/
+int get_tag (int pid){
+        uint32_t tag = syscall(__x64_sys_get_tag, pid);
+        return tag;
+}
+
+
+/*
+Invokes system call which attempts to change the tag of the process identified by pid to the new tag value
+new_tag. Returns new_level on success, and -1 otherwise.
+*/
+int set_tag (int pid, int new_tag){
+        uint32_t tag = syscall(__x64_sys_set_tag, pid, new_tag);
+        return tag;
+}
+
+//Header
+#include "harness.h"
+
+//Returns an int array of 2-4 values that can be used to make the set-tag system call.
+int* retrieve_set_tag_params(int pid,int new_tag){
+        //int array of 4 values
+        int *k = malloc(4);
+        k[0]=336;       //System call number
+        k[1]=2;         //2 Param
+        k[2]=pid;       //Param: PID
+        k[3]=new_tag;   //Param: tag
+        return k;
+}
+
+//Returns an int array of 2-4 values that can be used to make the get-tag system call.
+int* retrieve_get_tag_params(int pid){
+        //int array of 3 values 
+	int *k = malloc(3);
+        k[0]=335;       //System call number
+        k[1]=1;         //1 Param
+        k[2]=pid;       //Param: PID
+        return k;
+}
+
+/*
+After making the system call, we will pass the syscall return value to this function call.
+It should return set_tag’s interpretation of the system call completing with return value
+ret_value (i.e., what the library call should return to the user program).
+*/
+int interpret_set_tag_result(int ret_value){ 
+	return ret_value; 
+}
+/*
+After making the system call, we will pass the syscall return value to this function call.
+It should return get_tag’s interpretation of the system call completing with return value
+ret_value (i.e., what the library call should return to the user program).
+*/
+int interpret_get_tag_result(int ret_value){ 
+	return ret_value;
+};
+

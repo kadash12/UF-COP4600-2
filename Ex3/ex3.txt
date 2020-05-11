@@ -1,0 +1,19 @@
+Ex3: Code Reconnaissance
+
+1. Program call user space library function -> calls syscall function -> get process.
+
+2. Function with marco nr__ polls a syscall number (39).
+/src/linux-hwe-5.0.0/arch/x86/entry/syscalls$ nano syscall_64.tbl
+syscall function is a input for the function
+
+3. Function then goes get the define.
+/src/linux-hwe-5.0.0/kernel$ nano sys.c
+
+4. Trace methods used with greps kernel mode. ->sched.h ->pid.c
+
+5. Return from pid hash table.
+
+
+/src/linux-hwe-5.0.0/include/linux$ nano syscalls.h? (asmlinkage)
+
+*find_get_pid(int nr, struct pid_namespace *);

@@ -1,0 +1,63 @@
+Ex5: Race Conditions
+COP4600
+
+NAME
+Johnny Li
+
+DATE
+2/16/2020
+
+SYNOPSIS
+The goal of this exercise is to learn to identify and fix race conditions within a program. The exercise consists of 
+compiling and running a program that exhibits race conditions, explaining what caused the results, then insert code 
+to prevent these conditions from occurring, compile, run, and demonstrate the fixed version.
+
+DESCRIPTION
+A race condition is an undesirable situation that occurs when the system attempts to perform two or more operations at 
+the same time, but because of the nature of the system, the operations must be done in the proper sequence to be done 
+correctly else variable values might be overwritten or used out of order.  
+
+1) The race program creates 5 threads, each of which print the current iteration number, continuing the number value 
+one after the other (ex. If the value 10 was the input then thread 1 will output 1-10 and thread 2 will output 11-20 
+and so on). Then wait for each thread to terminate to add a new line at the end. The program also error check if the 
+input value was a valid number or not, printing an error message if not.
+
+2) The initial (after first five runs of race) ex5-output1.txt should have the value "49 50" printed 5 times if there 
+were no race conditions. This is because each threads print the current iteration number continuing the number value 
+one after the other, it would print 1-50 for 5 threads. However, the "tail -n3" format in the command given to run only 
+pipes the last 3 lines to the output text file, so only the value of "49 50 (space)" is to be shown in the text file. 
+Since the command was ran 5 times, there should be 5 copies of the output.
+
+3) In the last five runs of race in the final ex5-output1.txt, the values shown were all the expected "249999 250000". 
+This is because each threads print the current iteration number continuing the number value one after the other, it 
+would print 1-250000 for 5 threads at a input value of 50000. The "tail -n3" format in the command given to run only 
+pipes the last 3 lines to the output text file, so only the value of "249999 250000 (space)" is to be shown in the text 
+file.
+The outputs were all the same due to the limited sample size being the last 3 lines as it gives a misleading image of 
+there not being an race condition but in reality there were. Since the boundary values, beginning with empty memory or 
+finishing and freeing memory, of the program tend to be load light which makes it less likely for race condition to 
+occur. However, when the program is ran to output all lines, not just the last 3 lines, with "./race 5000000" it can be 
+seen the race conditions occurred in the middle of the program. 
+When the iteration value was up to 5000000 race conditions can be seen as the last two run shown "24540540 24540541" and
+"24992460 24992461" where it should have been "24999999 25000000 (space)". These run had values that differ from the others
+as the amount of iterations eventually stalled for a thread, allowing another thread to be take its value instead causing
+a mismatch of variable values that might have been overwritten or used out of order resulting in the incorrect output.
+
+4) The problem in the code was located in the loop of the loadSubRoutine() function. Line 22 to line 25 is the critical 
+region of the program, involving the incrementation of tmp and updating value variable, but as the thread is ran there 
+is a misordering of which current value belonged to which thread due to the system's processing. This resulted in some 
+threads printing out a value that didn't belong to them, incorrect output.
+
+5)  The mechanism used to prevent the race condition was a mutex lock in the loop of the loadSubRoutine() function to 
+prevent the access to the critical region from other threads so there wouldn't be any mismatch of variable values and 
+thread. This serializes the critical region in the processes to get correct behavior. The mutex lock was unlocked when 
+the critical region was finished running so that another thread can use it.
+
+TESTING
+Testing was done by running new_race.c to output all the numbers with varies input values (10, 10000, 50000, 200000) to 
+check that no race conditions occured. All numbers were printed because a limited sample size, the last 3 lines, can 
+give a misleading image of the status of the program. If no race conditions occured then the program was successfully fixed
+else it was back to debugging the code.
+
+REFERENCE
+https://stackoverflow.com/questions/9613934/pthread-race-condition-suspicious-behaviour

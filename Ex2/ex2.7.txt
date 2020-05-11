@@ -1,0 +1,120 @@
+.TH Ex2:The_Command_Line
+
+.SH NAME
+Johnny Li
+
+.SH SYNOPSIS
+The goal of this exercise is to learn to search, archive, and compress files to make them more manageable for transfer. A search from the kernel for the files that contain the phrase "_Ubuntu" and named "regulator.txt" had their output piped to a text file. The directory was then converted to a tar and gzip file.
+
+.SH DESCRIPTION
+Describing steps 1-11.
+.TP 5 
+1. Create a folder with the name format last_first in /home/reptilian.
+
+Go to the homepage with:
+cd /home/reptilian
+
+Make folder with the name format last_first:
+mkdir li_johnny
+.TP 5 
+2. Issue a command to find files that contain the phrase "_Ubuntu" from the kernel source directory.
+
+Go to kernel source with:
+cd /home/reptilian/src/
+
+Search for the phase "_Ubuntu":
+sudo grep -lr "_Ubuntu"
+.TP 5 
+3. Reissue the command from (2); this time, pipe the output of the command to a text file named ex2.txt.
+
+Show files then search for the phase "_Ubuntu" and pipe the output of the command to a text file named ex2.txt:
+ls -l | sudo grep -lr "_Ubuntu" > ex2.txt
+.TP 5 
+4. Take a screenshot of the command in (3) along with a listing of the directory of the first file from (2).
+
+Go to the listing of the directory of the first file with:
+cd src/linux-hwe-5.0.0/ubuntu/vbox/vboxvideo
+ls -l
+.TP 5 
+5. Issue a command to find files named “regulator.txt” from the kernel source directory.
+
+Go to kernel source with:
+cd /home/reptilian/src/
+
+Find the files called "regulator.txt":
+find -name regulator.txt
+.TP 5 
+6. Reissue  the  command  from  (5); this  time,  redirect  the  output  of  the  command  to  a  test  file  name “ex2files.txt”.
+
+Search for files called "regulator.txt" and pipe the output of the command to a text file named ex2files.txt:
+ls -l | find -name regulator.txt > ex2files.txt
+.TP 5 
+7. Take a screenshot of the command in (6) along with a listing of the directory ofthe first file found in (5).
+
+cd src/linux-hwe-5.0.0/Documentation/power/regulator
+ls -l
+.TP 5 
+8. Move or copy ex2.txt and ex2files.txt into the directory created in (1).
+
+Copy copy ex2.txt and ex2files.txt into the directory li_johnny.
+mv ex2.txt ex2files.txt /home/reptilian/li_johnny
+.TP 5 
+9. Read and complete the instructions in the “File Packaging and Compression” section.
+.TP 10
+-1) Create a file ("somefile.txt")
+
+nano somefile.txt
+.TP 10
+-2) Gzip the file, yielding (“somefile.txt.gz”)
+
+gzip somefile.txt
+.TP 10
+-3)Gunzip the file, yielding (“somefile.txt”)
+
+gunzip somefile.txt.gz
+.TP 10
+-4)Create a second file (“other.txt”)
+
+nano other.txt
+.TP 10
+-5)Create an archive from both files (“sometfile.txt” and “other.txt”), yielding “myfiles.tar” (tar -cvf)
+
+tar -cvf myfiles.tar other.txt somefile.txt
+.TP 10
+-6)Extract the files from the archive (tar -xvf)
+
+tar -xvf myfiles.tar
+.TP 10
+-7)Create a new file (“somefile2.txt”)
+
+nano somefile2.txt
+.TP 10
+-8)Create an archive file from all three text files piped through gzip to create a “.tar.gz” (tar -zcvf)
+
+tar -zcvf 3files.tar.gz other.txt somefile.txt somefile2.txt
+.TP 10
+-9)Type “ls” to view the current directory and your “.tar.gz”
+
+.TP 10
+-10)Unzip and Extract the “.tar.gz” (tar -xzvf)
+
+tar -zxvf 3files.tar.gz 
+.TP 10
+-11)Type “ls” to view the current directory and your extracted file.
+
+.TP 10
+-12)Take a screenshot of the commands run in steps (7 through 11)
+
+.TP 5 
+10. From /home/reptilian, create a tar file named ex2.tar of the directory from (1).
+
+Return to /home/reptilian:
+cd /home/reptilian
+
+Create a tar file named ex2.tar of the directory li_johnny:
+tar -cvf ex2.tar /home/reptilian/li_johnny
+.TP 5 
+11. Use gzip to compress ex2.tar (yielding ex2.tar.gz).
+
+Use gzip to compress ex2.tar:
+gzip ex2.tar

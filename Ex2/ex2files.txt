@@ -1,0 +1,2 @@
+./linux-hwe-5.0.0/Documentation/power/regulator/regulator.txt
+./linux-hwe-5.0.0/Documentation/devicetree/bindings/regulator/regulator.txt

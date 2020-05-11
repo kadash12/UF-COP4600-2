@@ -1,0 +1,185 @@
+diff --git a/arch/x86/entry/syscalls/syscall_64.tbl b/arch/x86/entry/syscalls/syscall_64.tbl
+index f0b1709a5..ed26c004f 100644
+--- a/arch/x86/entry/syscalls/syscall_64.tbl
++++ b/arch/x86/entry/syscalls/syscall_64.tbl
+@@ -343,6 +343,8 @@
+ 332	common	statx			__x64_sys_statx
+ 333	common	io_pgetevents		__x64_sys_io_pgetevents
+ 334	common	rseq			__x64_sys_rseq
++335	64	get_tag			__x64_sys_get_tag
++336	64	set_tag			__x64_sys_set_tag
+ 
+ #
+ # x32-specific system call numbers start at 512 to avoid cache impact
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index bc6026cdb..9d2e6cc9c 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -1205,6 +1205,9 @@ struct task_struct {
+ 	void				*security;
+ #endif
+ 
++	//Add uint32_t value to define tag.
++	uint32_t tags;
++
+ #ifdef CONFIG_GCC_PLUGIN_STACKLEAK
+ 	unsigned long			lowest_stack;
+ 	unsigned long			prev_lowest_stack;
+diff --git a/include/linux/sched/user.h b/include/linux/sched/user.h
+index 39ad98c09..2e162b3cb 100644
+--- a/include/linux/sched/user.h
++++ b/include/linux/sched/user.h
+@@ -13,6 +13,7 @@ struct key;
+  * Some day this will be a full-fledged user tracking system..
+  */
+ struct user_struct {
++	uint32_t tags;	//Tags variable
+ 	refcount_t __count;	/* reference count */
+ 	atomic_t processes;	/* How many processes does this user have? */
+ 	atomic_t sigpending;	/* How many pending signals does this user have? */
+diff --git a/include/linux/syscalls.h b/include/linux/syscalls.h
+index 257cccba3..67a7e4596 100644
+--- a/include/linux/syscalls.h
++++ b/include/linux/syscalls.h
+@@ -83,6 +83,7 @@ union bpf_attr;
+ #include <linux/key.h>
+ #include <linux/personality.h>
+ #include <trace/syscall.h>
++#include <asm/linkage.h>
+ 
+ #ifdef CONFIG_ARCH_HAS_SYSCALL_WRAPPER
+ /*
+@@ -1315,4 +1316,10 @@ static inline unsigned int ksys_personality(unsigned int personality)
+ 	return old;
+ }
+ 
++	//Create get and set method.
++	//One parameter for get.
++	asmlinkage long sys_get_tag(int pid);
++	//Two parameter for set.
++	asmlinkage long sys_set_tag(int pid, uint32_t tags);
++
+ #endif
+diff --git a/kernel/fork.c b/kernel/fork.c
+index f9a8d31f0..108ed2fa7 100644
+--- a/kernel/fork.c
++++ b/kernel/fork.c
+@@ -1979,6 +1979,7 @@ static __latent_entropy struct task_struct *copy_process(
+ #ifdef CONFIG_BLOCK
+ 	p->plug = NULL;
+ #endif
++
+ #ifdef CONFIG_FUTEX
+ 	p->robust_list = NULL;
+ #ifdef CONFIG_COMPAT
+diff --git a/kernel/sys.c b/kernel/sys.c
+index e33991478..d96ff2526 100644
+--- a/kernel/sys.c
++++ b/kernel/sys.c
+@@ -147,6 +147,94 @@ int fs_overflowgid = DEFAULT_FS_OVERFLOWGID;
+ EXPORT_SYMBOL(fs_overflowuid);
+ EXPORT_SYMBOL(fs_overflowgid);
+ 
++//Define the getaccesslv method, one parameter.
++SYSCALL_DEFINE1(get_tag, int, who){
++	//Set pointer,MSB, and defualt return value.
++	struct task_struct *p;
++        uint32_t tagNum=-1;
++	int msb;
++
++	//Invokes system call which reads the pid of the process identified by who.
++        if (who){
++                p = find_task_by_vpid(who);
++        }
++	//Get the tag on success.
++	if (p){
++		tagNum = p ->tags;
++
++		msb = tagNum >> 31;	//Get MSB
++		//Check MSB
++		if(msb == 1){
++			return -1;
++		}
++	}
++	return tagNum;
++}
++
++//Define the settag method, two parameter.
++SYSCALL_DEFINE2(set_tag, int, who, uint32_t, which) {
++        //Set pointers, MSB, LSB, and defualt return value.
++        struct task_struct *p;
++        uint32_t tagNum= which;
++        int msb;
++        int lsb;
++        uint32_t temp;  //Temporary Variable
++	uint32_t temp2;
++
++        //Invokes system call which reads the pid of the process identified by who.
++        if (who){
++                p = find_task_by_vpid(who);
++        }
++
++        msb = which >> 31;      //Get MSB
++        //Check if MSB is set on new tag
++        if (msb == 1){
++                return -1;      //Return -1
++        }
++
++        temp = which << 30;
++        lsb = temp >> 30;       //Get LSB New
++
++        //Check if Superuser
++	if (current_uid().val == 0){	//Superuser: UID=0
++		if (p){
++			p ->tags = tagNum;
++			return p ->tags;
++		}
++	}
++	//User process
++	else if ((current->pid == who) && (which <= p->tags)){
++		//Get bitmap only
++		temp = which >> 2;	//New
++		temp2 = p ->tags >> 2;	//Old
++		//Bitwise AND and return position
++		temp = (temp & (~temp2));
++
++		if(temp == 0){		//No bit set
++			temp = which >> 2;	//New
++			temp = temp << 2;	//Back to position
++
++			//Get LSB Old
++			temp2 = p ->tags << 30;
++			temp2 = temp2 >> 30;
++			//Decrease tag level
++			if(lsb<=temp2){
++				temp2=lsb;
++				//Bitwise OR for new tag
++				temp = temp | temp2;
++				//Set new tag for process
++				p ->tags = temp;
++				//Return tag
++				return p->tags;
++			}
++			else{	//New LSB is greater
++				return -1;
++			}
++		}
++	}
++	return -1;
++}
++
+ /*
+  * Returns true if current's euid is same as p's uid or euid,
+  * or has CAP_SYS_NICE to p's user_ns.
+diff --git a/kernel/user.c b/kernel/user.c
+index 0df9b1640..d03f1d1a4 100644
+--- a/kernel/user.c
++++ b/kernel/user.c
+@@ -102,6 +102,7 @@ struct user_struct root_user = {
+ 	.locked_shm     = 0,
+ 	.uid		= GLOBAL_ROOT_UID,
+ 	.ratelimit	= RATELIMIT_STATE_INIT(root_user.ratelimit, 0, 0),
++	.tags		= 0,
+ };
+ 
+ /*

@@ -1,0 +1,32 @@
+COP4600 Operating Systems
+Exercise 4 Commandline Debugger
+Johnny Li
+2/9/2020
+
+By going through each line in the main function with breakpoints, it was 
+discovered that the error occurred somewhere between line 94 and line 95 as it 
+could step into line 94 but not reach line 95. With more breakpoints, it revealed
+that the process into the loadSubRoutine(void* arg) and able to make its way to 
+insert the process but not print them. 
+
+Therefore the code was broken at line 79:
+memset((char*)0x100, 1, 100);
+
+The error was a segmentation fault which is usually caused by the mishandling of 
+pointers. In this line, there was a failure to initialize a pointer before 
+accessing it. The code attempt to declare, (char*), and define, 0x100, the pointer
+while in use as a parameter of memset(). This method was improper as the pointer 
+was not declared and the a value was not defined as needed to run memset() where 
+the function cannot write to an arbitrary memory location as such. This failed 
+pointer assignment led to memory problems that caused the segmentation fault to 
+occur. 
+
+This was fixed by initializing the pointer outside of memset() and then utilizing
+it in memset() as shown below. The char pointer cp was declared and defined with 
+a value of 0x100. It was then used within memset() through &cp.
+
+//A seg fault there was a failure to initialize a pointer before accessing it.
+//Cannot to write to arbitrary memory locations.
+//This was fixed by initializing the pointer and then utilizing it in memset().
+char* cp = 0x100;    //Initialize a char pointer at 0x100.                                                                           
+memset(&cp, 1, 100);    //Utilizing cp.

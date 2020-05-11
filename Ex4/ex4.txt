@@ -1,0 +1,43 @@
+Ubunut: ssh reptilian@localhost -p 9474
+
+Command Prompt: sftp -P 9474 reptilian@localhost
+
+Compile: gcc -w -g -o process process.c -lpthread -lrt
+Normal run: ./process
+	Error: Segmentation fault (core dumped)
+
+Segmentation location at line 94: pthread_join(l1, NULL);
+
+b line:
+main, 94, 77, 79 82
+
+Problem: 
+memset((char*)0x100, 1, 100);
+failure to initialize a pointer before accessing it
+pointer? -> seg fault
+
+Solution:
+//A seg fault there was a failure to initialize a pointer before accessing it.
+//Cannot to write to arbitrary memory locations.
+//This was fixed by initializing the pointer and then utilizing it in memset().
+char* cp = 0x100;	//Initialize a char pointer at 0x100.                                                                           
+memset(&cp, 1, 100);	//Utilizing cp.
+	
+
+gdb myProgram- start up the debugger on a sample program myProgram
+(gdb) help
+(gdb) run- run the code, compile your program with the “-g” flag
+(gdb) break main- Breakpoint on main
+(gdb) start- set temporary breakpoint at main and run
+(gdb) step- step through code
+	next-	run for ingle line of code
+	contiune- to next breakpoint
+(gdb) delete <breakpoint>- delete breakpoint, may specify it with the name or address
+The [list] command will show code around your current position. 
+The [layout next] next command willshow code in a separate panel.
+The [print <var> or *<array>@<index>] command will display the value of a variable.
+The [watch <var>] will allow you to see when its value changes.
+Apropos <keyword>- help (find commands related to keyword, show manual)
+Info <topic>- (provide information on breakpoints, etc.
+(gdb) quit
+

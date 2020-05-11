@@ -1,0 +1,37 @@
+Ubunut: ssh reptilian@localhost -p 9474
+
+Command Prompt: sftp -P 9474 reptilian@localhost
+
+Compile: $ gcc -w -o race race.c -lpthread 
+
+Unfix------------------------------------------------------
+Create text output:
+echo “COP4600 Ex5 Race Conditions” > ex5-output1.txt
+echo Johnny Li >> ex5-output1.txt
+echo 2/16/2020 >> ex5-output1.txt
+
+Run without race:
+echo “race 10” >> ex5-output1.txt
+./race 10 | tail -n3 >> ex5-output1.txt
+x5
+
+Run with race:
+echo “race 10000” >> ex5-output1.txt
+./race 10000 | tail -n3 >> ex5-output1.txt
+x5
+
+echo “race 50000” >> ex5-output1.txt
+./race 50000 | tail -n3 >> ex5-output1.txt
+x5
+
+cat ex5-output1.txt
+------------------------------------------------------------
+
+Fix---------------------------------------------------------
+echo “COP4600 Ex5 Race Conditions: fixed” > ex5-output2.txt
+echo Johnny Li >> ex5-output2.txt
+echo 2/16/2020 >> ex5-output2.txt
+echo “new_race 200000” >> ex5-output2.txt
+./new_race 200000| tail -n3 >> ex5-output2.txt
+x5
+cat ex5-output2.txt

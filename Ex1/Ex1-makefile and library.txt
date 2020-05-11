@@ -1,0 +1,88 @@
+Ex1-makefile and library
+
+*Transfer file/folder from PC to Ubuntu
+-Open command prompt in administrator mode.
+-cd to link address "C:\Users\Johnny Li\Downloads\UF Spring 2020\OS2"
+-"sftp -P 9474 reptilian@localhost"
+-Enter password: "reptilian"
+-Inside Ubuntu now -> "cd li_johnny"
+1. "put filename"
+2. Make a folder at location 
+   "put -r foldername" 
+
+*Makefile
+-Write makefile outside in notepad++.
+-nano makefile
+-Copy and paste makefile from notepad++ to nano.
+-Use "make" to run/compile it.
+-Use "./name" (green text) to run it.
+--------------------------------------------------------------
+
+#Johnny Li
+#EX - 1 Make and libraries 
+# --- macros
+CC=cc
+
+# --- targets
+main: main.o bar.o
+	$(CC) -o main main.o bar.o
+	
+main.o: main.c
+	$(CC) -c main.c
+	
+bar.o: bar.c bar.h
+	$(CC) -c bar.c 
+
+# --- remove binary and executable files
+clean:
+	rm main.o bar.o main
+--------------------------------------------------------------
+
+*Library
+-Contiune on makefile with library excution on top of main excution
+or make new makefile.
+-Make a .a file based on .o file
+-Use "ar cr libfilename.a excutionname.o"
+-Use ranlib libfilename.a
+-Same as makefile design.
+	-Write makefile outside in notepad++.
+	-nano makefile
+	-Copy and paste makefile from notepad++ to nano.
+	-Use "make" to run/compile it.
+	-Use "./name" (green text) to run it.
+--------------------------------------------------------------
+
+#Johnny Li
+#EX - 1 Make and libraries
+# --- macros
+CC=cc
+
+# --- targets
+# --- makefile
+useLib: useLib.o libmath.a
+        $(CC) -o useLib useLib.o libmath.a -LI
+
+main: main.o bar.o
+        $(CC) -o main main.o bar.o
+
+main.o: main.c
+        $(CC) -c main.c
+
+bar.o: bar.c bar.h
+        $(CC) -c bar.c
+
+# --- Library
+math_lib.o: math_lib.c mathlib.h
+        $(CC) -c math_lib.c
+
+libmath.a: math_lib.o
+        ar cr libmath.a math_lib.o
+        ranlib libmath.a
+
+useLib.o: useLib.c mathlib.h
+        $(CC) -c useLib.c
+
+# --- remove binary and executable files
+clean:
+        rm main.o bar.o main
+        rm useLib.o math_lib.o useLib

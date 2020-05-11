@@ -1,0 +1,85 @@
+P1: System Calls
+COP4600
+	
+NAME
+Johnny Li
+
+DATE
+3/1/2020
+
+SYNOPSIS
+	The goal of project 1 was to implement two system calls in the OS along with two library functions for the system library 
+API so that the system calls can be invoked from a C program. The system calls within the kernel space handled the retrieval and 
+setting of tags on the running processes through a get and set method. A static library function was created to allow the system 
+call to be invoked from a C API by referring to their respective syscall(). A harness library was created to verify the system calls, 
+returning a pointer to an int array of 2-4 values that can be used to make the system call. Manual pages detailing the two system 
+calls, the two wrapper library functions, and the four harness function calls were also created and stored within the man file path 
+location.
+
+DESCRIPTION 
+	The first stage was to create a custom tag attribute for all processes. This would be an unsigned 32-bit integer (uint32_t) 
+variable as specified in the project document. This additional variable had to be declared within both user and task structure so 
+that all tasks/processes will have it upon initialization. The task structure is located at:
+/home/reptilian/src/linux-hwe-5.0.0/include/linux/sched.h
+	The scheduler’s header was edited because it is where all process to be run or implemented is initialized [1], thus it would 
+be the place to declare a tag for all processes to contain when made. I created a custom unsigned 32-bit integer called "tags" to 
+hold the bitmap and the tag level in sched.h of processes.  
+	The user structure is located at:
+/home/reptilian/src/linux-hwe-5.0.0/include/linux/sched/user.h
+	The user's header is a user tracking system that keeps tabs on the number of processes, files, etc, that the user is currently utilizing. 
+Adding "uint32_t tag"  in the user structure offers the processes without a parent, which is tracked through the current holding values 
+within the user structure, to be ensured that the newly orphaned process will have the tag [2] to hold the bitmap and the tag level.
+	Once the custom attribute tag is declared, it now has to be initialized a default value. This initialized tag value must apply 
+to all those processes without a parent process while children will simply inherit the tag value from their parent when fork(). Therefore 
+the initialization of the tag occurs in: 
+/home/reptilian/src/linux-hwe-5.0.0/kernel/user.c
+	user.c is where the users' variables are initialized thus the tag should set there as it would apply to all the processes being 
+initially created [2]. This was hinted from the .c and .h dual of the files. As requested in the project documentation, tags was made 0 
+through ".tags = 0,".
+	The second stage is to create system calls that allow a process to get and set the tag of a process. The system call header is 
+where the get_tag and set_tag declaration need to be placed to be recognized as system calls. The location is at:
+/home/reptilian/src/linux-hwe-5.0.0/include/linux/syscalls.h
+	Stating the header of the get_tag, with one parameter, and the set_tag, two parameters, using asmlinkage [3] as such "asmlinkage long 
+sys_get_tag(int pid);" and "asmlinkage long sys_set_tag(int pid, uint32_t tags);". 
+	The system call functions from syscalls.h. are defined in sys.c located at:
+/home/reptilian/src/linux-hwe-5.0.0/kernel/sys.c
+	The get_tag system call reads and returns the tag of the process identified by the input parameter, pid, for both superusers and 
+regular users, an unrestrictive system call. While set_tag follow the project guidelines and “rules for this system will be based on a write 
+restricted access model” [4]. The attempts that set_tag has to change the tag of the process identified by pid to the new tag value as such 
+of the given limitation of only resetting bits or lowering its tag level are hardcoded in a series of “if-else” statement [4]. 
+	The third step is to list the functions to be recognized as a system call process, it needs to be listed here:
+/home/reptilian/src/linux-hwe-5.0.0/arch/x86/entry/syscalls/syscall_64.tbl
+	The syscall_64.tbl contains the listing of system call numbers and to be recognized as a system call process it needs to be listed 
+here. In the syscall_64.tbl, the get_tag and set_tag functions are recorded in the system call log as “__x64_sys_get_tag” and "__x64_sys_set_tag" 
+so when called, the system call numbers can be obtained to identified and used to trigger the appropriate system call to run.
+	The final stage was to create static library functions that allow the system calls to be invoked via a C API. Thus, the library and 
+harness function headers, given in the project document, was declared in tags.h and harness.h. The definitions of the system calls were 
+hardcoded in tags.c, note that a harness.c was not made, combined with the harness functions [5] for one .c file. A static library file named 
+libtag.a and a Makefile was created to compile everything needed with the projects. The entire tags folder was then compiled, tar, and compress 
+to meet specifications. 
+	The 4 man pages were created in the tags; 2 per a system call (man 2), 1 for the library functions (man 3), and 1 for the harness functions 
+(man 3). The man pages were then gzipped and in the makefile, it was hardcoded to be linked and moved to the manpath location with "sudo cp (path)": 
+/usr/share/man
+so that they can be called on from anywhere in the OS. For the library functions, multiple links were made to the one man page to simplify the coding.
+
+TESTING
+	In testing the system call, the test files from canvas (settag.c, gettag.c, and p1_student_test) were placed into the OS and then compiled 
+and ran. The automated test unit ran and passed all test cases. Additional testing was done with a mix of combinational input testing, for verifying 
+that the program still met specifications under various circumstances. A program was written to infinitely fork(), with a delay so that the user 
+could response, to check the tags were inherited correctly. The man pages were tested by going to a random directory and "man <#> name" to ensure they
+work.
+
+ERRORS
+	Some bug encountered includes some whitespace errors and an invalid tag input will lead to the program to crash. A critical bug was that race 
+condition occurred with rapid use of set_tags resulting in confusing outputs that took a while to understand. 
+
+REFERENCES/CITATIONS
+[1] https://www.spinics.net/lists/newbies/msg10175.html
+[2] https://stackoverflow.com/questions/27594865/add-another-field-to-user-struct
+[3] https://stackoverflow.com/questions/10459688/what-is-the-asmlinkage-modifier-meant-for
+[4] https://stackoverflow.com/questions/39229639/how-to-get-current-processs-uid-and-euid-in-linux-kernel-4-2
+[5] https://bytes.com/topic/c/answers/731500-writing-test-harness-function
+
+YOUTUBE
+https://youtu.be/eB7Ab0IF7YE
+https://www.youtube.com/watch?v=eB7Ab0IF7YE

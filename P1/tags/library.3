@@ -1,0 +1,46 @@
+.TH LIBRARY 3 03/01/2020 library "Library Function"
+.SH NAME
+.PP
+get_tag() - library function that calls the system call get_tag
+.PP
+set_tag() - library function that calls the system call set_tag
+.SH SYNOPSIS
+get_tag(int pid)
+.PP
+set_tag(int pid, int new_tag)
+.PP
+pid - integer process id of target process
+.PP
+new_tag - an uint32_t tag value to be updated in the target process
+.SH DESCRIPTION
+get_tag()
+	Invokes the system call which reads the tag of the process identified by pid. Returns the tag on success, and -1 otherwise.
+The get_tag library function acts as a wrapper function for the system call get_tag and returns the value that was obtained from the system call.
+.PP
+set_tag()
+	Invokes system call which attempts to change the tag of the process identified by pid to the new tag value new_tag. Returns new_level on success, and -1 otherwise.
+The set_tag library function acts as a wrapper function for the system call set_tag and returns the value that was obtained from the system call.
+.SH ERRORS
+For any errors, any condition were to fail which it then would return -1.
+Such cases include but not limited too:
+.PP
+	get_tag()
+.PP
+Invalid pid input, a pid of a non-running process. The main checking occurs through the system call rather than in the library function.
+.PP
+	set_tag()
+.PP
+Inputting an invalid pid or new_tag. The main checking occurs through the system call rather than in the system call the system call function.
+.SH NOTES
+There are several contradictions within the guideline. The ruling outcome is as given:
+.PP
+a) The library functions set_tag and get_tag should return the tag, not the level. That is, always return the whole tag.
+.PP
+b) The library functions at as wrappers for the system calls.
+.SH SEE ALSO
+get_tag(2), retrieve_get_tag_params(3), interpret_get_tag_result(3)
+.PP
+set_tag(2), retrieve_set_tag_params(3), interpret_set_tag_result(3)
+.SH AUTHOR
+Johnny Li
+
